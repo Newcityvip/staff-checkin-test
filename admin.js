@@ -1,4 +1,4 @@
-const API_BASE = "https://staff-portal-proxy.mdrobiulislam.workers.dev";
+const API_BASE = "https://black-snowflake-338b.mdrobiulislam.workers.dev/";
 
 const apiStatus = document.getElementById("apiStatus");
 const uploadBtn = document.getElementById("uploadBtn");
