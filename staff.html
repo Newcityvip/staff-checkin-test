@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Staff Portal</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+
+      <!-- HEADER -->
+      <div class="header-row">
+        <div>
+          <h1>Staff Portal</h1>
+          <p class="sub">Today shift, attendance status, break actions, and live performance score.</p>
+        </div>
+        <div class="right-actions">
+          <div class="status-pill" id="apiStatus">API: Checking...</div>
+          <button type="button" class="small-btn secondary-btn" id="logoutBtn">Logout</button>
+        </div>
+      </div>
+
+      <div class="access-banner" id="accessBanner">Checking office access...</div>
+
+      <!-- STAFF DETAILS -->
+      <div class="panel">
+        <div class="panel-title-row">
+          <h3>Staff Details</h3>
+          <span class="mini-pill mini-pill-muted">Profile</span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <tbody>
+              <tr>
+                <th style="width:220px;">Staff Name</th>
+                <td id="staffName">-</td>
+                <th style="width:220px;">Login ID</th>
+                <td id="staffLoginIdView">-</td>
+              </tr>
+              <tr>
+                <th>Team</th>
+                <td id="staffTeam">-</td>
+                <th>Role</th>
+                <td id="staffRole">-</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TODAY SHIFT -->
+      <div class="panel">
+        <div class="panel-title-row">
+          <h3>Today Shift</h3>
+          <span class="mini-pill" id="shiftStatusPill">-</span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <tbody>
+              <tr>
+                <th style="width:220px;">Date</th>
+                <td id="shiftDate">-</td>
+                <th style="width:220px;">Shift Code</th>
+                <td id="shiftCode">-</td>
+              </tr>
+              <tr>
+                <th>Start Time</th>
+                <td id="shiftStart">-</td>
+                <th>End Time</th>
+                <td id="shiftEnd">-</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- LIVE SCORE -->
+      <div class="panel">
+        <div class="panel-title-row">
+          <h3>Live Performance Score</h3>
+          <span class="mini-pill" id="liveScoreMonth">Live</span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <tbody>
+              <tr>
+                <th style="width:220px;">Attendance Score</th>
+                <td id="attendanceScore">-</td>
+                <th style="width:220px;">KPI Score</th>
+                <td id="kpiScore">-</td>
+              </tr>
+              <tr>
+                <th>Final Score</th>
+                <td id="finalScore">-</td>
+                <th>Rating</th>
+                <td id="ratingLabel">-</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="help" id="scoreNote">Attendance 40% + KPI 60% = Final Score</div>
+      </div>
+
+      <!-- CHECK IN / OUT -->
+      <div class="actions split-actions">
+        <button id="checkInBtn">Check In</button>
+        <button id="checkOutBtn" class="secondary-btn">Check Out</button>
+      </div>
+
+      <!-- BREAK ACTIONS -->
+      <div class="panel">
+        <div class="panel-title-row">
+          <h3>Break Actions</h3>
+          <span class="mini-pill mini-pill-muted" id="breakStatusPill">Ready</span>
+        </div>
+
+        <div class="grid two">
+          <div>
+            <label>Break Type</label>
+            <select id="breakType">
+              <option value="BREAK">Break</option>
+              <option value="PRAYER_BREAK">Prayer Break</option>
+              <option value="BIO_BREAK">Bio Break</option>
+            </select>
+          </div>
+          <div>
+            <label>Remark (optional)</label>
+            <input type="text" id="breakRemark" placeholder="Optional remark"/>
+          </div>
+        </div>
+
+        <div class="actions split-actions">
+          <button id="breakStartBtn">Start Break</button>
+          <button id="breakEndBtn" class="secondary-btn">End Break</button>
+        </div>
+      </div>
+
+      <!-- TODAY ATTENDANCE -->
+      <div class="panel">
+        <div class="panel-title-row">
+          <h3>Today Attendance</h3>
+          <span class="mini-pill mini-pill-muted" id="attendanceStatusPill">No logs yet</span>
+        </div>
+
+        <div class="grid four">
+          <div class="mini-card">
+            <label>Check In</label>
+            <div id="todayCheckIn">-</div>
+          </div>
+          <div class="mini-card">
+            <label>Check Out</label>
+            <div id="todayCheckOut">-</div>
+          </div>
+          <div class="mini-card">
+            <label>Status</label>
+            <div id="todayStatus">-</div>
+          </div>
+          <div class="mini-card">
+            <label>Late Minutes</label>
+            <div id="todayLateMinutes">-</div>
+          </div>
+        </div>
+
+        <div class="result-box" id="todayAttendanceDetails">No attendance action found for today.</div>
+      </div>
+
+      <!-- STAFF SCORE BOARD -->
+      <div class="panel">
+        <div class="panel-title-row">
+          <h3>Staff Score Board</h3>
+          <span class="mini-pill" id="scoreboardMonthPill">-</span>
+        </div>
+
+        <div class="scoreboard-layout">
+
+          <!-- MY DETAILS -->
+          <div class="scoreboard-left">
+            <h4>My Full Score Details</h4>
+
+            <div class="table-wrap">
+              <table>
+                <tbody>
+                  <tr><th colspan="2">Basic Information</th></tr>
+                  <tr><th style="width:220px;">Full Name</th><td id="meFullName">-</td></tr>
+                  <tr><th>Login ID</th><td id="meLoginId">-</td></tr>
+                  <tr><th>Team</th><td id="meTeam">-</td></tr>
+                  <tr><th>Role</th><td id="meRole">-</td></tr>
+
+                  <tr><th colspan="2">Final Score Summary</th></tr>
+                  <tr><th>Attendance Score</th><td id="meAttendanceScore">-</td></tr>
+                  <tr><th>KPI Score</th><td id="meKpiScore">-</td></tr>
+                  <tr><th>Final Score</th><td id="meFinalScore">-</td></tr>
+                  <tr><th>Rating</th><td id="meRatingLabel">-</td></tr>
+                  <tr><th>Rank</th><td id="meRank">-</td></tr>
+
+                  <tr><th colspan="2">KPI Details</th></tr>
+                  <tr><th>Leadership</th><td id="meLeadership">-</td></tr>
+                  <tr><th>Effectiveness</th><td id="meEffectiveness">-</td></tr>
+                  <tr><th>Problem Solving</th><td id="meProblemSolving">-</td></tr>
+                  <tr><th>Communication</th><td id="meCommunication">-</td></tr>
+                  <tr><th>Productivity</th><td id="meProductivity">-</td></tr>
+                  <tr><th>Initiative</th><td id="meInitiative">-</td></tr>
+                  <tr><th>Penalty</th><td id="mePenalty">-</td></tr>
+
+                  <tr><th colspan="2">Attendance Details</th></tr>
+                  <tr><th>Working Days</th><td id="meWorkingDays">-</td></tr>
+                  <tr><th>Off Days</th><td id="meOffDays">-</td></tr>
+                  <tr><th>Leave Days</th><td id="meLeaveDays">-</td></tr>
+                  <tr><th>Late Days</th><td id="meLateDays">-</td></tr>
+                  <tr><th>Missing Sign In</th><td id="meMissingSignInDays">-</td></tr>
+                  <tr><th>Missing Sign Out</th><td id="meMissingSignOutDays">-</td></tr>
+                  <tr><th>Total Late Minutes</th><td id="meTotalLateMinutes">-</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- OTHERS -->
+          <div class="scoreboard-right">
+            <h4>Other Staff Final Scores</h4>
+            <div id="otherStaffScores" class="other-staff-list">
+              <div class="mini-card">Loading...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESULT -->
+      <div class="panel">
+        <div class="panel-title-row">
+          <h3>Latest Action Result</h3>
+        </div>
+        <div class="result-box" id="resultBox">No action yet.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- LOADING POPUP -->
+  <div id="actionModal" class="action-modal hidden">
+    <div class="action-modal-card">
+      <div class="action-spinner">⏳</div>
+      <div class="action-title" id="actionModalTitle">Processing...</div>
+      <div class="action-text" id="actionModalText">Please wait...</div>
+    </div>
+  </div>
+
+  <!-- SUCCESS POPUP -->
+  <div id="successModal" class="action-modal hidden">
+    <div class="action-modal-card">
+      <div class="action-spinner success-check">✅</div>
+      <div class="action-title" id="successModalTitle">Done</div>
+      <div class="action-text" id="successModalText">Action completed successfully.</div>
+      <div style="margin-top:14px;">
+        <button id="successOkBtn" class="small-btn">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="staff.js"></script>
+</body>
+</html>

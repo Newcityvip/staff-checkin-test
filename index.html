@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Staff Login Portal</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+
+<body class="portal-body">
+  <div class="page portal-page">
+    <div class="portal-shell">
+
+      <div id="accessBanner" class="access-banner">Checking access...</div>
+
+      <div class="portal-brand">
+        <div class="brand-badge">SP</div>
+        <div>
+          <h1>Staff Login Portal</h1>
+          <p class="sub">Choose the correct login area below to continue.</p>
+        </div>
+      </div>
+
+      <div class="portal-grid">
+
+        <section class="auth-card">
+          <div class="auth-head">
+            <span class="mini-pill">Staff Access</span>
+            <h2>Staff Login</h2>
+            <p class="sub">Use your staff login ID to enter the portal.</p>
+          </div>
+
+          <div class="field">
+            <label for="staffLoginId">Login ID</label>
+            <input type="text" id="staffLoginId" placeholder="Enter your login ID" />
+          </div>
+
+          <button id="staffLoginBtn">Login as Staff</button>
+          <div id="staffStatus" class="inline-status">Waiting...</div>
+        </section>
+
+        <section class="auth-card auth-card-admin">
+          <div class="auth-head">
+            <span class="mini-pill mini-pill-dark">Admin Access</span>
+            <h2>Admin Login</h2>
+            <p class="sub">Authorized admin users only.</p>
+          </div>
+
+          <div class="field">
+            <label for="adminLoginId">Admin ID</label>
+            <input type="text" id="adminLoginId" placeholder="Enter admin ID" />
+          </div>
+
+          <div class="field">
+            <label for="adminPassword">Password</label>
+            <input type="password" id="adminPassword" placeholder="Enter password" />
+          </div>
+
+          <button id="adminLoginBtn" class="btn-dark">Login as Admin</button>
+          <div id="adminStatus" class="inline-status">Waiting...</div>
+        </section>
+
+      </div>
+
+      <div class="footer-note">
+        <div id="apiStatus" class="status-pill">API: Checking...</div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+const API = "https://staff-portal-proxy.mdrobiulislam.workers.dev";
+
+const apiStatus = document.getElementById("apiStatus");
+const accessBanner = document.getElementById("accessBanner");
+
+const staffBtn = document.getElementById("staffLoginBtn");
+const adminBtn = document.getElementById("adminLoginBtn");
+
+const staffStatus = document.getElementById("staffStatus");
+const adminStatus = document.getElementById("adminStatus");
+
+let CLIENT_IP = "";
+
+/* ========= API STATUS ========= */
+async function checkAPI(){
+  try{
+    const res = await fetch(API + "?action=health");
+    const data = await res.json();
+    apiStatus.textContent = "API: Online (" + data.version + ")";
+  }catch{
+    apiStatus.textContent = "API: Offline";
+  }
+}
+
+/* ========= IP CHECK ========= */
+async function checkAccess(){
+  try{
+    const res = await fetch(API + "?action=portalAccess");
+    const data = await res.json();
+
+    CLIENT_IP = data.client_ip || "";
+
+    if(data.allowed){
+      accessBanner.textContent = "Access Allowed (IP: " + CLIENT_IP + ")";
+    }else{
+      accessBanner.innerHTML = `
+        ❌ Access Blocked <br/>
+        Your IP: ${CLIENT_IP} <br/>
+        Only office network allowed
+      `;
+      document.querySelector(".portal-grid").style.display = "none";
+    }
+
+  }catch{
+    accessBanner.textContent = "IP check failed";
+  }
+}
+
+/* ========= POST ========= */
+async function post(payload){
+  const res = await fetch(API,{
+    method:"POST",
+    headers:{"Content-Type":"text/plain"},
+    body:JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+/* ========= STAFF LOGIN ========= */
+staffBtn.onclick = async ()=>{
+  const id = document.getElementById("staffLoginId").value.trim();
+  if(!id){
+    staffStatus.textContent = "Enter login ID";
+    return;
+  }
+
+  staffBtn.disabled = true;
+  staffStatus.textContent = "Logging in...";
+
+  try{
+    const data = await post({
+      action:"staffLogin",
+      login_id:id
+    });
+
+    if(!data.ok){
+      staffStatus.textContent = data.error || "Login failed";
+      staffBtn.disabled = false;
+      return;
+    }
+
+    localStorage.setItem("staffPortalStaff", JSON.stringify(data.staff));
+    localStorage.setItem("staffPortalClientIp", CLIENT_IP);
+
+    staffStatus.textContent = "Success → opening...";
+    window.location = "staff.html";
+
+  }catch(e){
+    staffStatus.textContent = "Error";
+    staffBtn.disabled = false;
+  }
+};
+
+/* ========= ADMIN LOGIN ========= */
+adminBtn.onclick = async ()=>{
+  const id = document.getElementById("adminLoginId").value.trim();
+  const pass = document.getElementById("adminPassword").value;
+
+  if(!id || !pass){
+    adminStatus.textContent = "Enter ID & password";
+    return;
+  }
+
+  adminBtn.disabled = true;
+  adminStatus.textContent = "Checking...";
+
+  try{
+    const data = await post({
+      action:"adminLogin",
+      login_id:id,
+      password:pass
+    });
+
+    if(!data.ok){
+      adminStatus.textContent = data.error || "Login failed";
+      adminBtn.disabled = false;
+      return;
+    }
+
+    localStorage.setItem("staffPortalAdmin", JSON.stringify({ login_id: id }));
+    adminStatus.textContent = "Success → opening...";
+    window.location = "admin.html";
+
+  }catch(e){
+    adminStatus.textContent = "Error";
+    adminBtn.disabled = false;
+  }
+};
+
+checkAPI();
+checkAccess();
+</script>
+</body>
+</html>
