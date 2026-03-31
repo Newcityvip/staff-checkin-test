@@ -74,7 +74,6 @@ let currentStaff = null;
 let currentShift = null;
 let todayLogs = [];
 let portalClientIp = localStorage.getItem("staffPortalClientIp") || "";
-let dashboardBundlePromise = null;
 
 /* ========= BASIC HELPERS ========= */
 function setText(node, value) {
@@ -373,19 +372,6 @@ async function checkPortalAccess() {
   }
 }
 
-async function fetchDashboardBundle(force = false) {
-  if (!force && dashboardBundlePromise) return dashboardBundlePromise;
-
-  dashboardBundlePromise = getJson(
-    `${API_BASE}?action=staffDashboard&login_id=${encodeURIComponent(currentStaff.login_id)}`
-  ).catch(err => {
-    dashboardBundlePromise = null;
-    throw err;
-  });
-
-  return dashboardBundlePromise;
-}
-
 /* ========= TODAY SHIFT ========= */
 async function loadTodayShift() {
   const data = await getJson(
@@ -478,33 +464,6 @@ async function loadAttendance() {
   }
 }
 
-async function loadCriticalPanelData() {
-  await Promise.allSettled([
-    loadTodayShift(),
-    loadAttendance()
-  ]);
-  refreshButtonState();
-}
-
-function loadDeferredPanelData(force = false) {
-  setTimeout(async () => {
-    try {
-      const bundle = await fetchDashboardBundle(force);
-      await Promise.allSettled([
-        loadUpcomingSchedule(bundle),
-        loadPerformanceScore(bundle),
-        loadStaffScoreboard(bundle)
-      ]);
-    } catch (err) {
-      await Promise.allSettled([
-        loadUpcomingSchedule(),
-        loadPerformanceScore(),
-        loadStaffScoreboard()
-      ]);
-    }
-  }, 0);
-}
-
 function refreshButtonState() {
   const checkIn = todayLogs.find(x => toUpper(x.action_type) === "CHECK_IN");
   const checkOut = todayLogs.find(x => toUpper(x.action_type) === "CHECK_OUT");
@@ -518,13 +477,12 @@ function refreshButtonState() {
 }
 
 /* ========= SCORE ========= */
-async function loadPerformanceScore(bundleData = null) {
+async function loadPerformanceScore() {
   try {
-    const data = bundleData || await getJson(
+    const data = await getJson(
       `${API_BASE}?action=performanceScore&login_id=${encodeURIComponent(currentStaff.login_id)}`
     );
 
-    const score = bundleData ? (data.performance || {}) : (data.data || {});
     if (!data.ok) {
       setText(attendanceScoreEl, "-");
       setText(kpiScoreEl, "-");
@@ -534,6 +492,7 @@ async function loadPerformanceScore(bundleData = null) {
       return;
     }
 
+    const score = data.data || {};
     setText(attendanceScoreEl, score.attendance_score);
     setText(kpiScoreEl, score.kpi_score);
     setText(finalScoreEl, score.final_score);
@@ -661,15 +620,13 @@ function renderOtherStaffScores(items) {
   `).join("");
 }
 
-async function loadStaffScoreboard(bundleData = null) {
+async function loadStaffScoreboard() {
   try {
-    const data = bundleData || await getJson(
+    const data = await getJson(
       `${API_BASE}?action=staffScoreboard&login_id=${encodeURIComponent(currentStaff.login_id)}`
     );
 
-    const payload = bundleData ? (data.scoreboard || {}) : data;
-
-    if (!data?.ok || !payload) {
+    if (!data?.ok) {
       renderMyScoreDetails(null);
       renderOtherStaffScores([]);
       if (scoreboardMonthTagEl) scoreboardMonthTagEl.textContent = "-";
@@ -677,11 +634,11 @@ async function loadStaffScoreboard(bundleData = null) {
     }
 
     if (scoreboardMonthTagEl) {
-      scoreboardMonthTagEl.textContent = payload.month || data.leaderboard_month || "Live";
+      scoreboardMonthTagEl.textContent = data.month || "Live";
     }
 
-    renderMyScoreDetails(payload.me || null);
-    renderOtherStaffScores(payload.others || []);
+    renderMyScoreDetails(data.me || null);
+    renderOtherStaffScores(data.others || []);
   } catch (err) {
     renderMyScoreDetails(null);
     renderOtherStaffScores([]);
@@ -721,18 +678,9 @@ function getDeviceInfo() {
 
 /* ========= ACTION RUNNERS ========= */
 async function afterActionRefresh() {
-  dashboardBundlePromise = null;
-  await Promise.allSettled([
-    loadAttendance(),
-    (async () => {
-      const bundle = await fetchDashboardBundle(true);
-      await Promise.allSettled([
-        loadUpcomingSchedule(bundle),
-        loadPerformanceScore(bundle),
-        loadStaffScoreboard(bundle)
-      ]);
-    })()
-  ]);
+  await loadAttendance();
+  await loadPerformanceScore();
+  await loadStaffScoreboard();
   refreshButtonState();
 }
 
@@ -897,15 +845,19 @@ async function init() {
   fillStaffCard();
   checkApi();
 
+  await loadTodayShift();
+  await loadAttendance();
+  await loadPerformanceScore();
+  await loadStaffScoreboard();
+
+  refreshButtonState();
+
   if (checkInBtn) checkInBtn.addEventListener("click", handleCheckIn);
   if (checkOutBtn) checkOutBtn.addEventListener("click", handleCheckOut);
   if (breakStartBtn) breakStartBtn.addEventListener("click", () => handleBreakAction("START"));
   if (breakEndBtn) breakEndBtn.addEventListener("click", () => handleBreakAction("END"));
   if (breakTypeSelect) breakTypeSelect.addEventListener("change", () => updateBreakState(todayLogs));
   if (logoutBtn) logoutBtn.addEventListener("click", logout);
-
-  await loadCriticalPanelData();
-  loadDeferredPanelData();
 }
 
 init();
