@@ -1,4 +1,4 @@
-const API_BASE = "https://black-snowflake-338b.mdrobiulislam.workers.dev/";
+const API_BASE = "https://staff-portal-proxy.mdrobiulislam.workers.dev";
 
 /* ========= ELEMENT HELPERS ========= */
 function el(...ids) {
@@ -24,8 +24,6 @@ const resultBox = el("resultMessage", "resultBox");
 const attendanceBox = el("attendanceMessage", "attendanceBox");
 const attendanceState = el("attendanceState");
 const shiftStatusPill = el("shiftStatusPill");
-const upcomingScheduleBody = el("upcomingScheduleBody");
-const upcomingSchedulePill = el("upcomingSchedulePill");
 
 const todayCheckInEl = el("todayCheckIn");
 const todayCheckOutEl = el("todayCheckOut");
@@ -76,6 +74,7 @@ let currentStaff = null;
 let currentShift = null;
 let todayLogs = [];
 let portalClientIp = localStorage.getItem("staffPortalClientIp") || "";
+let dashboardBundlePromise = null;
 
 /* ========= BASIC HELPERS ========= */
 function setText(node, value) {
@@ -374,6 +373,19 @@ async function checkPortalAccess() {
   }
 }
 
+async function fetchDashboardBundle(force = false) {
+  if (!force && dashboardBundlePromise) return dashboardBundlePromise;
+
+  dashboardBundlePromise = getJson(
+    `${API_BASE}?action=staffDashboard&login_id=${encodeURIComponent(currentStaff.login_id)}`
+  ).catch(err => {
+    dashboardBundlePromise = null;
+    throw err;
+  });
+
+  return dashboardBundlePromise;
+}
+
 /* ========= TODAY SHIFT ========= */
 async function loadTodayShift() {
   const data = await getJson(
@@ -398,46 +410,6 @@ async function loadTodayShift() {
     if (shiftStatusPill) shiftStatusPill.textContent = "LEAVE";
   } else {
     if (shiftStatusPill) shiftStatusPill.textContent = "WORKING DAY";
-  }
-}
-
-
-function renderUpcomingSchedule(rows, labelText = "Next 7 Days") {
-  if (upcomingSchedulePill) upcomingSchedulePill.textContent = labelText;
-
-  if (!upcomingScheduleBody) return;
-
-  if (!rows || !rows.length) {
-    upcomingScheduleBody.innerHTML = `<tr><td colspan="5">No upcoming schedule found.</td></tr>`;
-    return;
-  }
-
-  upcomingScheduleBody.innerHTML = rows.map(item => `
-    <tr>
-      <td>${escapeHtml(item.date || "-")}</td>
-      <td>${escapeHtml(item.shift_code || "-")}</td>
-      <td>${escapeHtml(item.scheduled_start || "-")}</td>
-      <td>${escapeHtml(item.scheduled_end || "-")}</td>
-      <td>${escapeHtml(item.status_label || (item.is_off_day ? "OFF DAY" : (item.is_leave_day ? "LEAVE" : "WORKING DAY")))}</td>
-    </tr>
-  `).join("");
-}
-
-async function loadUpcomingSchedule() {
-  try {
-    const data = await getJson(
-      `${API_BASE}?action=staffDashboard&login_id=${encodeURIComponent(currentStaff.login_id)}`
-    );
-
-    if (!data?.ok) {
-      renderUpcomingSchedule([], "Next 7 Days");
-      return;
-    }
-
-    const rows = data.next_7_days_schedule || [];
-    renderUpcomingSchedule(rows, "Next 7 Days");
-  } catch (err) {
-    renderUpcomingSchedule([], "Next 7 Days");
   }
 }
 
@@ -514,13 +486,22 @@ async function loadCriticalPanelData() {
   refreshButtonState();
 }
 
-function loadDeferredPanelData() {
-  setTimeout(() => {
-    Promise.allSettled([
-      loadUpcomingSchedule(),
-      loadPerformanceScore(),
-      loadStaffScoreboard()
-    ]);
+function loadDeferredPanelData(force = false) {
+  setTimeout(async () => {
+    try {
+      const bundle = await fetchDashboardBundle(force);
+      await Promise.allSettled([
+        loadUpcomingSchedule(bundle),
+        loadPerformanceScore(bundle),
+        loadStaffScoreboard(bundle)
+      ]);
+    } catch (err) {
+      await Promise.allSettled([
+        loadUpcomingSchedule(),
+        loadPerformanceScore(),
+        loadStaffScoreboard()
+      ]);
+    }
   }, 0);
 }
 
@@ -537,12 +518,13 @@ function refreshButtonState() {
 }
 
 /* ========= SCORE ========= */
-async function loadPerformanceScore() {
+async function loadPerformanceScore(bundleData = null) {
   try {
-    const data = await getJson(
+    const data = bundleData || await getJson(
       `${API_BASE}?action=performanceScore&login_id=${encodeURIComponent(currentStaff.login_id)}`
     );
 
+    const score = bundleData ? (data.performance || {}) : (data.data || {});
     if (!data.ok) {
       setText(attendanceScoreEl, "-");
       setText(kpiScoreEl, "-");
@@ -552,7 +534,6 @@ async function loadPerformanceScore() {
       return;
     }
 
-    const score = data.data || {};
     setText(attendanceScoreEl, score.attendance_score);
     setText(kpiScoreEl, score.kpi_score);
     setText(finalScoreEl, score.final_score);
@@ -680,13 +661,15 @@ function renderOtherStaffScores(items) {
   `).join("");
 }
 
-async function loadStaffScoreboard() {
+async function loadStaffScoreboard(bundleData = null) {
   try {
-    const data = await getJson(
+    const data = bundleData || await getJson(
       `${API_BASE}?action=staffScoreboard&login_id=${encodeURIComponent(currentStaff.login_id)}`
     );
 
-    if (!data?.ok) {
+    const payload = bundleData ? (data.scoreboard || {}) : data;
+
+    if (!data?.ok || !payload) {
       renderMyScoreDetails(null);
       renderOtherStaffScores([]);
       if (scoreboardMonthTagEl) scoreboardMonthTagEl.textContent = "-";
@@ -694,11 +677,11 @@ async function loadStaffScoreboard() {
     }
 
     if (scoreboardMonthTagEl) {
-      scoreboardMonthTagEl.textContent = data.month || "Live";
+      scoreboardMonthTagEl.textContent = payload.month || data.leaderboard_month || "Live";
     }
 
-    renderMyScoreDetails(data.me || null);
-    renderOtherStaffScores(data.others || []);
+    renderMyScoreDetails(payload.me || null);
+    renderOtherStaffScores(payload.others || []);
   } catch (err) {
     renderMyScoreDetails(null);
     renderOtherStaffScores([]);
@@ -738,11 +721,17 @@ function getDeviceInfo() {
 
 /* ========= ACTION RUNNERS ========= */
 async function afterActionRefresh() {
+  dashboardBundlePromise = null;
   await Promise.allSettled([
     loadAttendance(),
-    loadPerformanceScore(),
-    loadStaffScoreboard(),
-    loadUpcomingSchedule()
+    (async () => {
+      const bundle = await fetchDashboardBundle(true);
+      await Promise.allSettled([
+        loadUpcomingSchedule(bundle),
+        loadPerformanceScore(bundle),
+        loadStaffScoreboard(bundle)
+      ]);
+    })()
   ]);
   refreshButtonState();
 }
@@ -908,20 +897,15 @@ async function init() {
   fillStaffCard();
   checkApi();
 
-  await loadTodayShift();
-  await loadUpcomingSchedule();
-  await loadAttendance();
-  await loadPerformanceScore();
-  await loadStaffScoreboard();
-
-  refreshButtonState();
-
   if (checkInBtn) checkInBtn.addEventListener("click", handleCheckIn);
   if (checkOutBtn) checkOutBtn.addEventListener("click", handleCheckOut);
   if (breakStartBtn) breakStartBtn.addEventListener("click", () => handleBreakAction("START"));
   if (breakEndBtn) breakEndBtn.addEventListener("click", () => handleBreakAction("END"));
   if (breakTypeSelect) breakTypeSelect.addEventListener("change", () => updateBreakState(todayLogs));
   if (logoutBtn) logoutBtn.addEventListener("click", logout);
+
+  await loadCriticalPanelData();
+  loadDeferredPanelData();
 }
 
 init();
