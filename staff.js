@@ -1,4 +1,4 @@
-const API_BASE = "https://black-snowflake-338b.mdrobiulislam.workers.dev/";
+const API_BASE = "https://staff-portal-proxy.mdrobiulislam.workers.dev";
 
 /* ========= ELEMENT HELPERS ========= */
 function el(...ids) {
@@ -24,6 +24,8 @@ const resultBox = el("resultMessage", "resultBox");
 const attendanceBox = el("attendanceMessage", "attendanceBox");
 const attendanceState = el("attendanceState");
 const shiftStatusPill = el("shiftStatusPill");
+const upcomingScheduleBody = el("upcomingScheduleBody");
+const upcomingSchedulePill = el("upcomingSchedulePill");
 
 const todayCheckInEl = el("todayCheckIn");
 const todayCheckOutEl = el("todayCheckOut");
@@ -399,6 +401,46 @@ async function loadTodayShift() {
   }
 }
 
+
+function renderUpcomingSchedule(rows, labelText = "Next 7 Days") {
+  if (upcomingSchedulePill) upcomingSchedulePill.textContent = labelText;
+
+  if (!upcomingScheduleBody) return;
+
+  if (!rows || !rows.length) {
+    upcomingScheduleBody.innerHTML = `<tr><td colspan="5">No upcoming schedule found.</td></tr>`;
+    return;
+  }
+
+  upcomingScheduleBody.innerHTML = rows.map(item => `
+    <tr>
+      <td>${escapeHtml(item.date || "-")}</td>
+      <td>${escapeHtml(item.shift_code || "-")}</td>
+      <td>${escapeHtml(item.scheduled_start || "-")}</td>
+      <td>${escapeHtml(item.scheduled_end || "-")}</td>
+      <td>${escapeHtml(item.status_label || (item.is_off_day ? "OFF DAY" : (item.is_leave_day ? "LEAVE" : "WORKING DAY")))}</td>
+    </tr>
+  `).join("");
+}
+
+async function loadUpcomingSchedule() {
+  try {
+    const data = await getJson(
+      `${API_BASE}?action=staffDashboard&login_id=${encodeURIComponent(currentStaff.login_id)}`
+    );
+
+    if (!data?.ok) {
+      renderUpcomingSchedule([], "Next 7 Days");
+      return;
+    }
+
+    const rows = data.next_7_days_schedule || [];
+    renderUpcomingSchedule(rows, "Next 7 Days");
+  } catch (err) {
+    renderUpcomingSchedule([], "Next 7 Days");
+  }
+}
+
 /* ========= ATTENDANCE ========= */
 function buildAttendanceSummary(logs) {
   if (!logs || !logs.length) {
@@ -681,6 +723,7 @@ async function afterActionRefresh() {
   await loadAttendance();
   await loadPerformanceScore();
   await loadStaffScoreboard();
+  await loadUpcomingSchedule();
   refreshButtonState();
 }
 
@@ -846,6 +889,7 @@ async function init() {
   checkApi();
 
   await loadTodayShift();
+  await loadUpcomingSchedule();
   await loadAttendance();
   await loadPerformanceScore();
   await loadStaffScoreboard();
