@@ -506,6 +506,24 @@ async function loadAttendance() {
   }
 }
 
+async function loadCriticalPanelData() {
+  await Promise.allSettled([
+    loadTodayShift(),
+    loadAttendance()
+  ]);
+  refreshButtonState();
+}
+
+function loadDeferredPanelData() {
+  setTimeout(() => {
+    Promise.allSettled([
+      loadUpcomingSchedule(),
+      loadPerformanceScore(),
+      loadStaffScoreboard()
+    ]);
+  }, 0);
+}
+
 function refreshButtonState() {
   const checkIn = todayLogs.find(x => toUpper(x.action_type) === "CHECK_IN");
   const checkOut = todayLogs.find(x => toUpper(x.action_type) === "CHECK_OUT");
@@ -720,10 +738,12 @@ function getDeviceInfo() {
 
 /* ========= ACTION RUNNERS ========= */
 async function afterActionRefresh() {
-  await loadAttendance();
-  await loadPerformanceScore();
-  await loadStaffScoreboard();
-  await loadUpcomingSchedule();
+  await Promise.allSettled([
+    loadAttendance(),
+    loadPerformanceScore(),
+    loadStaffScoreboard(),
+    loadUpcomingSchedule()
+  ]);
   refreshButtonState();
 }
 
