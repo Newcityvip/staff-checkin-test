@@ -426,7 +426,7 @@ function renderUpcomingSchedule(rows, labelText = "Next 7 Days") {
 async function loadUpcomingSchedule() {
   try {
     const data = await getJson(
-      `${API_BASE}?action=upcomingSchedule&login_id=${encodeURIComponent(currentStaff.login_id)}&days=7`
+      `${API_BASE}?action=staffDashboard&login_id=${encodeURIComponent(currentStaff.login_id)}`
     );
 
     if (!data?.ok) {
@@ -434,7 +434,7 @@ async function loadUpcomingSchedule() {
       return;
     }
 
-    const rows = data.data || [];
+    const rows = data.next_7_days_schedule || [];
     renderUpcomingSchedule(rows, "Next 7 Days");
   } catch (err) {
     renderUpcomingSchedule([], "Next 7 Days");
@@ -506,96 +506,21 @@ async function loadAttendance() {
   }
 }
 
-function applyTodayShiftData(shiftData) {
-  currentShift = shiftData || {};
-  setText(el("shiftDate"), currentShift.date);
-  setText(el("shiftCode"), currentShift.shift_code);
-  setText(el("shiftStart"), currentShift.scheduled_start);
-  setText(el("shiftEnd"), currentShift.scheduled_end);
-
-  if (currentShift.is_off_day) {
-    if (shiftStatusPill) shiftStatusPill.textContent = "OFF DAY";
-  } else if (currentShift.is_leave_day) {
-    if (shiftStatusPill) shiftStatusPill.textContent = "LEAVE";
-  } else {
-    if (shiftStatusPill) shiftStatusPill.textContent = "WORKING DAY";
-  }
-}
-
-function applyAttendanceData(logs) {
-  todayLogs = logs || [];
-  showAttendanceMessage(buildAttendanceSummary(todayLogs));
-}
-
 async function loadCriticalPanelData() {
-  try {
-    const data = await getJson(
-      `${API_BASE}?action=staffBootstrap&login_id=${encodeURIComponent(currentStaff.login_id)}`
-    );
-
-    if (data?.ok) {
-      applyTodayShiftData(data.today_shift || {});
-      applyAttendanceData(data.today_attendance || []);
-    } else {
-      await Promise.allSettled([loadTodayShift(), loadAttendance()]);
-    }
-  } catch (err) {
-    await Promise.allSettled([loadTodayShift(), loadAttendance()]);
-  }
-
+  await Promise.allSettled([
+    loadTodayShift(),
+    loadAttendance()
+  ]);
   refreshButtonState();
 }
 
-function applyDeferredPanelData(data) {
-  if (!data || !data.ok) return;
-
-  const perf = data.performance || {};
-  setText(attendanceScoreEl, perf.attendance_score);
-  setText(kpiScoreEl, perf.kpi_score);
-  setText(finalScoreEl, perf.final_score);
-  setText(ratingLabelEl, perf.rating_label);
-
-  if (scoreUpdatedTagEl) {
-    scoreUpdatedTagEl.textContent = perf.score_month || "Live";
-  }
-
-  if (scoreNoteEl) {
-    const aw = perf.attendance_weight ?? 40;
-    const kw = perf.kpi_weight ?? 60;
-    scoreNoteEl.textContent = `Attendance ${aw}% + KPI ${kw}% = Final Score`;
-  }
-
-  const scoreboard = data.scoreboard || {};
-  if (scoreboardMonthTagEl) scoreboardMonthTagEl.textContent = scoreboard.month || data.month || "Live";
-  renderMyScoreDetails(scoreboard.me || null);
-  renderOtherStaffScores(scoreboard.others || []);
-
-  renderUpcomingSchedule(data.upcoming_schedule || [], "Next 7 Days");
-}
-
 function loadDeferredPanelData() {
-  setTimeout(async () => {
-    try {
-      const data = await getJson(
-        `${API_BASE}?action=staffPanelDeferred&login_id=${encodeURIComponent(currentStaff.login_id)}&days=7`
-      );
-
-      if (data?.ok) {
-        applyDeferredPanelData(data);
-      } else {
-        await Promise.allSettled([
-          loadUpcomingSchedule(),
-          loadPerformanceScore(),
-          loadStaffScoreboard()
-        ]);
-      }
-    } catch (err) {
-      await Promise.allSettled([
-        loadUpcomingSchedule(),
-        loadPerformanceScore(),
-        loadStaffScoreboard()
-      ]);
-    }
+  setTimeout(() => {
+    Promise.allSettled([
+      loadUpcomingSchedule(),
+      loadPerformanceScore(),
+      loadStaffScoreboard()
+    ]);
   }, 0);
 }
 
@@ -824,26 +749,23 @@ async function afterActionRefresh() {
 
 async function handleBreakAction(mode) {
   const breakTypeRaw = String(breakTypeSelect?.value || "BREAK").trim().toUpperCase();
-
-const breakTypeMap = {
-  "BREAK": "BREAK",
-  "GENERAL": "BREAK",
-  "GENERAL_BREAK": "BREAK",
-  "PRAYER": "PRAYER_BREAK",
-  "PRAYER BREAK": "PRAYER_BREAK",
-  "PRAYER_BREAK": "PRAYER_BREAK",
-  "BIO": "BIO_BREAK",
-  "BIO BREAK": "BIO_BREAK",
-  "BIO_BREAK": "BIO_BREAK"
-};
-
-const breakType = breakTypeMap[breakTypeRaw] || "BREAK";
-const breakTypeLabel =
-  breakType === "PRAYER_BREAK" ? "Prayer Break" :
-  breakType === "BIO_BREAK" ? "Bio Break" :
-  "Break";
-
-const remarks = breakRemarkInput?.value?.trim() || "";
+  const breakTypeMap = {
+    "BREAK": "BREAK",
+    "GENERAL": "BREAK",
+    "GENERAL_BREAK": "BREAK",
+    "PRAYER": "PRAYER_BREAK",
+    "PRAYER BREAK": "PRAYER_BREAK",
+    "PRAYER_BREAK": "PRAYER_BREAK",
+    "BIO": "BIO_BREAK",
+    "BIO BREAK": "BIO_BREAK",
+    "BIO_BREAK": "BIO_BREAK"
+  };
+  const breakType = breakTypeMap[breakTypeRaw] || "BREAK";
+  const breakTypeLabel =
+    breakType === "PRAYER_BREAK" ? "Prayer Break" :
+    breakType === "BIO_BREAK" ? "Bio Break" :
+    "Break";
+  const remarks = breakRemarkInput?.value?.trim() || "";
 
   if (mode === "START") {
     if (breakStartBtn) breakStartBtn.disabled = true;
@@ -852,10 +774,10 @@ const remarks = breakRemarkInput?.value?.trim() || "";
   }
 
   showActionPopup(
-  mode === "START" ? `Starting ${breakTypeLabel}` : `Ending ${breakTypeLabel}`,
-  `${breakTypeLabel} is being processed...`,
-  "loading"
-);
+    mode === "START" ? `Starting ${breakTypeLabel}` : `Ending ${breakTypeLabel}`,
+    `${breakTypeLabel} is being processed...`,
+    "loading"
+  );
 
   try {
     const data = await postJson({
@@ -996,26 +918,26 @@ async function init() {
 
   ensurePopup();
 
-  if (checkInBtn) checkInBtn.addEventListener("click", handleCheckIn);
-  if (checkOutBtn) checkOutBtn.addEventListener("click", handleCheckOut);
-  if (breakStartBtn) breakStartBtn.addEventListener("click", () => handleBreakAction("START"));
-  if (breakEndBtn) breakEndBtn.addEventListener("click", () => handleBreakAction("END"));
-  if (breakTypeSelect) breakTypeSelect.addEventListener("change", () => updateBreakState(todayLogs));
-  if (logoutBtn) logoutBtn.addEventListener("click", logout);
-
-  if (checkInBtn) checkInBtn.disabled = false;
-  if (checkOutBtn) checkOutBtn.disabled = true;
-  if (breakStartBtn) breakStartBtn.disabled = true;
-  if (breakEndBtn) breakEndBtn.disabled = true;
-
   const allowed = await checkPortalAccess();
   if (!allowed) return;
 
   fillStaffCard();
   checkApi();
 
-  await loadCriticalPanelData();
-  loadDeferredPanelData();
+  await loadTodayShift();
+  await loadUpcomingSchedule();
+  await loadAttendance();
+  await loadPerformanceScore();
+  await loadStaffScoreboard();
+
+  refreshButtonState();
+
+  if (checkInBtn) checkInBtn.addEventListener("click", handleCheckIn);
+  if (checkOutBtn) checkOutBtn.addEventListener("click", handleCheckOut);
+  if (breakStartBtn) breakStartBtn.addEventListener("click", () => handleBreakAction("START"));
+  if (breakEndBtn) breakEndBtn.addEventListener("click", () => handleBreakAction("END"));
+  if (breakTypeSelect) breakTypeSelect.addEventListener("change", () => updateBreakState(todayLogs));
+  if (logoutBtn) logoutBtn.addEventListener("click", logout);
 }
 
 init();
