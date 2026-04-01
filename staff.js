@@ -176,6 +176,21 @@ function prettifyLabel(key) {
     .replace(/\b\w/g, s => s.toUpperCase());
 }
 
+
+function buildQuarterlyScoreNote(score) {
+  const quarterLabel = String((score && score.score_month) || "Current Quarter").trim();
+  const aw = score && score.attendance_weight != null ? score.attendance_weight : 40;
+  const kw = score && score.kpi_weight != null ? score.kpi_weight : 60;
+  const monthCount = Number(score && score.quarter_month_count != null ? score.quarter_month_count : 0);
+  const availableMonths = Array.isArray(score && score.quarter_available_months) ? score.quarter_available_months : [];
+
+  if (monthCount > 0 && availableMonths.length) {
+    return `Quarterly Final Score (${quarterLabel}) is shown here. Attendance ${aw}% + KPI ${kw}% formula is averaged from ${monthCount} available month(s): ${availableMonths.join(", ")}.`;
+  }
+
+  return `Quarterly Final Score (${quarterLabel}) is shown here. Attendance ${aw}% + KPI ${kw}% formula is used for available months in this quarter.`;
+}
+
 /* ========= POPUP ========= */
 function ensurePopup() {
   let popup = document.getElementById("actionPopup");
