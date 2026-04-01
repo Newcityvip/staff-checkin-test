@@ -748,7 +748,23 @@ async function afterActionRefresh() {
 }
 
 async function handleBreakAction(mode) {
-  const breakType = breakTypeSelect?.value || "BREAK";
+  const breakTypeRaw = String(breakTypeSelect?.value || "BREAK").trim().toUpperCase();
+  const breakTypeMap = {
+    "BREAK": "BREAK",
+    "GENERAL": "BREAK",
+    "GENERAL_BREAK": "BREAK",
+    "PRAYER": "PRAYER_BREAK",
+    "PRAYER BREAK": "PRAYER_BREAK",
+    "PRAYER_BREAK": "PRAYER_BREAK",
+    "BIO": "BIO_BREAK",
+    "BIO BREAK": "BIO_BREAK",
+    "BIO_BREAK": "BIO_BREAK"
+  };
+  const breakType = breakTypeMap[breakTypeRaw] || "BREAK";
+  const breakTypeLabel =
+    breakType === "PRAYER_BREAK" ? "Prayer Break" :
+    breakType === "BIO_BREAK" ? "Bio Break" :
+    "Break";
   const remarks = breakRemarkInput?.value?.trim() || "";
 
   if (mode === "START") {
@@ -758,8 +774,8 @@ async function handleBreakAction(mode) {
   }
 
   showActionPopup(
-    mode === "START" ? "Starting Break" : "Ending Break",
-    `${breakType.replaceAll("_", " ")} is being processed...`,
+    mode === "START" ? `Starting ${breakTypeLabel}` : `Ending ${breakTypeLabel}`,
+    `${breakTypeLabel} is being processed...`,
     "loading"
   );
 
