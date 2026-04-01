@@ -560,9 +560,7 @@ function applyDeferredPanelData(data) {
   }
 
   if (scoreNoteEl) {
-    const aw = perf.attendance_weight ?? 40;
-    const kw = perf.kpi_weight ?? 60;
-    scoreNoteEl.textContent = `Attendance ${aw}% + KPI ${kw}% = Final Score`;
+    scoreNoteEl.textContent = buildQuarterlyScoreNote(perf);
   }
 
   const scoreboard = data.scoreboard || {};
@@ -639,9 +637,7 @@ async function loadPerformanceScore() {
     }
 
     if (scoreNoteEl) {
-      const aw = score.attendance_weight ?? 40;
-      const kw = score.kpi_weight ?? 60;
-      scoreNoteEl.textContent = `Attendance ${aw}% + KPI ${kw}% = Final Score`;
+      scoreNoteEl.textContent = buildQuarterlyScoreNote(score);
     }
   } catch (err) {
     setText(attendanceScoreEl, "-");
@@ -719,7 +715,8 @@ function renderMyScoreDetails(item) {
   setText(meTotalLateMinutesEl, attendance.total_late_minutes);
 
   if (myScoreBox) {
-    myScoreBox.textContent = "";
+    const quarterLabel = item.quarter_label || scoreboardMonthTagEl?.textContent || "Current Quarter";
+    myScoreBox.textContent = `Showing quarterly final score for ${quarterLabel}.`;
   }
 }
 
@@ -746,7 +743,7 @@ function renderOtherStaffScores(items) {
     <div class="score-row">
       <div class="score-row-left">
         <div class="score-row-name">${escapeHtml(item.full_name || "-")}</div>
-        <div class="score-row-sub">${escapeHtml(item.team || "-")} | ${escapeHtml(item.rating_label || "-")}</div>
+        <div class="score-row-sub">${escapeHtml(item.team || "-")} | Quarterly | ${escapeHtml(item.rating_label || "-")}</div>
       </div>
       <div class="score-row-right">
         <span class="final-score-chip">${fmtScore(item.final_score)}</span>
@@ -816,8 +813,7 @@ async function afterActionRefresh() {
   await Promise.allSettled([
     loadAttendance(),
     loadPerformanceScore(),
-    loadStaffScoreboard(),
-    loadUpcomingSchedule()
+    loadStaffScoreboard()
   ]);
   refreshButtonState();
 }
