@@ -24,6 +24,8 @@ const resultBox = el("resultMessage", "resultBox");
 const attendanceBox = el("attendanceMessage", "attendanceBox");
 const attendanceState = el("attendanceState");
 const shiftStatusPill = el("shiftStatusPill");
+const upcomingScheduleBody = el("upcomingScheduleBody");
+const upcomingSchedulePill = el("upcomingSchedulePill");
 
 const todayCheckInEl = el("todayCheckIn");
 const todayCheckOutEl = el("todayCheckOut");
@@ -399,6 +401,46 @@ async function loadTodayShift() {
   }
 }
 
+
+function renderUpcomingSchedule(rows, labelText = "Next 7 Days") {
+  if (upcomingSchedulePill) upcomingSchedulePill.textContent = labelText;
+
+  if (!upcomingScheduleBody) return;
+
+  if (!rows || !rows.length) {
+    upcomingScheduleBody.innerHTML = `<tr><td colspan="5">No upcoming schedule found.</td></tr>`;
+    return;
+  }
+
+  upcomingScheduleBody.innerHTML = rows.map(item => `
+    <tr>
+      <td>${escapeHtml(item.date || "-")}</td>
+      <td>${escapeHtml(item.shift_code || "-")}</td>
+      <td>${escapeHtml(item.scheduled_start || "-")}</td>
+      <td>${escapeHtml(item.scheduled_end || "-")}</td>
+      <td>${escapeHtml(item.status_label || (item.is_off_day ? "OFF DAY" : (item.is_leave_day ? "LEAVE" : "WORKING DAY")))}</td>
+    </tr>
+  `).join("");
+}
+
+async function loadUpcomingSchedule() {
+  try {
+    const data = await getJson(
+      `${API_BASE}?action=staffDashboard&login_id=${encodeURIComponent(currentStaff.login_id)}`
+    );
+
+    if (!data?.ok) {
+      renderUpcomingSchedule([], "Next 7 Days");
+      return;
+    }
+
+    const rows = data.next_7_days_schedule || [];
+    renderUpcomingSchedule(rows, "Next 7 Days");
+  } catch (err) {
+    renderUpcomingSchedule([], "Next 7 Days");
+  }
+}
+
 /* ========= ATTENDANCE ========= */
 function buildAttendanceSummary(logs) {
   if (!logs || !logs.length) {
@@ -462,6 +504,24 @@ async function loadAttendance() {
     showAttendanceMessage("Could not load attendance.");
     updateBreakState([]);
   }
+}
+
+async function loadCriticalPanelData() {
+  await Promise.allSettled([
+    loadTodayShift(),
+    loadAttendance()
+  ]);
+  refreshButtonState();
+}
+
+function loadDeferredPanelData() {
+  setTimeout(() => {
+    Promise.allSettled([
+      loadUpcomingSchedule(),
+      loadPerformanceScore(),
+      loadStaffScoreboard()
+    ]);
+  }, 0);
 }
 
 function refreshButtonState() {
@@ -678,9 +738,12 @@ function getDeviceInfo() {
 
 /* ========= ACTION RUNNERS ========= */
 async function afterActionRefresh() {
-  await loadAttendance();
-  await loadPerformanceScore();
-  await loadStaffScoreboard();
+  await Promise.allSettled([
+    loadAttendance(),
+    loadPerformanceScore(),
+    loadStaffScoreboard(),
+    loadUpcomingSchedule()
+  ]);
   refreshButtonState();
 }
 
@@ -845,19 +908,15 @@ async function init() {
   fillStaffCard();
   checkApi();
 
-  await loadTodayShift();
-  await loadAttendance();
-  await loadPerformanceScore();
-  await loadStaffScoreboard();
-
-  refreshButtonState();
-
   if (checkInBtn) checkInBtn.addEventListener("click", handleCheckIn);
   if (checkOutBtn) checkOutBtn.addEventListener("click", handleCheckOut);
   if (breakStartBtn) breakStartBtn.addEventListener("click", () => handleBreakAction("START"));
   if (breakEndBtn) breakEndBtn.addEventListener("click", () => handleBreakAction("END"));
   if (breakTypeSelect) breakTypeSelect.addEventListener("change", () => updateBreakState(todayLogs));
   if (logoutBtn) logoutBtn.addEventListener("click", logout);
+
+  await loadCriticalPanelData();
+  loadDeferredPanelData();
 }
 
 init();
