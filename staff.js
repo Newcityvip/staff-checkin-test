@@ -426,7 +426,7 @@ function renderUpcomingSchedule(rows, labelText = "Next 7 Days") {
 async function loadUpcomingSchedule() {
   try {
     const data = await getJson(
-      `${API_BASE}?action=staffDashboard&login_id=${encodeURIComponent(currentStaff.login_id)}`
+      `${API_BASE}?action=upcomingSchedule&login_id=${encodeURIComponent(currentStaff.login_id)}&days=7`
     );
 
     if (!data?.ok) {
@@ -434,7 +434,7 @@ async function loadUpcomingSchedule() {
       return;
     }
 
-    const rows = data.next_7_days_schedule || [];
+    const rows = data.data || [];
     renderUpcomingSchedule(rows, "Next 7 Days");
   } catch (err) {
     renderUpcomingSchedule([], "Next 7 Days");
@@ -902,18 +902,18 @@ async function init() {
 
   ensurePopup();
 
-  const allowed = await checkPortalAccess();
-  if (!allowed) return;
-
-  fillStaffCard();
-  checkApi();
-
   if (checkInBtn) checkInBtn.addEventListener("click", handleCheckIn);
   if (checkOutBtn) checkOutBtn.addEventListener("click", handleCheckOut);
   if (breakStartBtn) breakStartBtn.addEventListener("click", () => handleBreakAction("START"));
   if (breakEndBtn) breakEndBtn.addEventListener("click", () => handleBreakAction("END"));
   if (breakTypeSelect) breakTypeSelect.addEventListener("change", () => updateBreakState(todayLogs));
   if (logoutBtn) logoutBtn.addEventListener("click", logout);
+
+  const allowed = await checkPortalAccess();
+  if (!allowed) return;
+
+  fillStaffCard();
+  checkApi();
 
   await loadCriticalPanelData();
   loadDeferredPanelData();
