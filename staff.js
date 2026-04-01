@@ -587,28 +587,12 @@ function applyDeferredPanelData(data) {
 }
 
 function loadDeferredPanelData() {
-  setTimeout(async () => {
-    try {
-      const data = await getJson(
-        `${API_BASE}?action=staffPanelDeferred&login_id=${encodeURIComponent(currentStaff.login_id)}&days=7`
-      );
-
-      if (data?.ok) {
-        applyDeferredPanelData(data);
-      } else {
-        await Promise.allSettled([
-          loadUpcomingSchedule(),
-          loadPerformanceScore(),
-          loadStaffScoreboard()
-        ]);
-      }
-    } catch (err) {
-      await Promise.allSettled([
-        loadUpcomingSchedule(),
-        loadPerformanceScore(),
-        loadStaffScoreboard()
-      ]);
-    }
+  setTimeout(() => {
+    Promise.allSettled([
+      loadPerformanceScore(),
+      loadStaffScoreboard(),
+      loadUpcomingSchedule()
+    ]);
   }, 0);
 }
 
