@@ -77,6 +77,47 @@ let currentShift = null;
 let todayLogs = [];
 let portalClientIp = localStorage.getItem("staffPortalClientIp") || "";
 
+
+let scoreboardLoadStarted = false;
+
+function loadStaffScoreboardOnce() {
+  if (scoreboardLoadStarted) return;
+  scoreboardLoadStarted = true;
+  loadStaffScoreboard();
+}
+
+function setupLazyScoreboardLoad() {
+  const target = el("scoreboardMonthTag") || el("otherStaffScores") || el("myScoreBox");
+  if (!target) {
+    setTimeout(loadStaffScoreboardOnce, 300);
+    return;
+  }
+
+  if (!("IntersectionObserver" in window)) {
+    setTimeout(loadStaffScoreboardOnce, 300);
+    return;
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    const hit = entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0);
+    if (hit) {
+      observer.disconnect();
+      loadStaffScoreboardOnce();
+    }
+  }, {
+    root: null,
+    rootMargin: "300px 0px",
+    threshold: 0.01
+  });
+
+  observer.observe(target);
+
+  setTimeout(() => {
+    observer.disconnect();
+    loadStaffScoreboardOnce();
+  }, 1200);
+}
+
 /* ========= BASIC HELPERS ========= */
 function setText(node, value) {
   if (!node) return;
@@ -174,21 +215,6 @@ function prettifyLabel(key) {
   return map[key] || String(key || "")
     .replaceAll("_", " ")
     .replace(/\b\w/g, s => s.toUpperCase());
-}
-
-
-function buildQuarterlyScoreNote(score) {
-  const quarterLabel = String((score && score.score_month) || "Current Quarter").trim();
-  const aw = score && score.attendance_weight != null ? score.attendance_weight : 40;
-  const kw = score && score.kpi_weight != null ? score.kpi_weight : 60;
-  const monthCount = Number(score && score.quarter_month_count != null ? score.quarter_month_count : 0);
-  const availableMonths = Array.isArray(score && score.quarter_available_months) ? score.quarter_available_months : [];
-
-  if (monthCount > 0 && availableMonths.length) {
-    return `Quarterly Final Score (${quarterLabel}) is shown here. Attendance ${aw}% + KPI ${kw}% formula is averaged from ${monthCount} available month(s): ${availableMonths.join(", ")}.`;
-  }
-
-  return `Quarterly Final Score (${quarterLabel}) is shown here. Attendance ${aw}% + KPI ${kw}% formula is used for available months in this quarter.`;
 }
 
 /* ========= POPUP ========= */
@@ -575,7 +601,9 @@ function applyDeferredPanelData(data) {
   }
 
   if (scoreNoteEl) {
-    scoreNoteEl.textContent = buildQuarterlyScoreNote(perf);
+    const aw = perf.attendance_weight ?? 40;
+    const kw = perf.kpi_weight ?? 60;
+    scoreNoteEl.textContent = `Attendance ${aw}% + KPI ${kw}% = Final Score`;
   }
 
   const scoreboard = data.scoreboard || {};
@@ -590,9 +618,9 @@ function loadDeferredPanelData() {
   setTimeout(() => {
     Promise.allSettled([
       loadPerformanceScore(),
-      loadStaffScoreboard(),
       loadUpcomingSchedule()
     ]);
+    setupLazyScoreboardLoad();
   }, 0);
 }
 
@@ -636,7 +664,9 @@ async function loadPerformanceScore() {
     }
 
     if (scoreNoteEl) {
-      scoreNoteEl.textContent = buildQuarterlyScoreNote(score);
+      const aw = score.attendance_weight ?? 40;
+      const kw = score.kpi_weight ?? 60;
+      scoreNoteEl.textContent = `Attendance ${aw}% + KPI ${kw}% = Final Score`;
     }
   } catch (err) {
     setText(attendanceScoreEl, "-");
@@ -714,8 +744,7 @@ function renderMyScoreDetails(item) {
   setText(meTotalLateMinutesEl, attendance.total_late_minutes);
 
   if (myScoreBox) {
-    const quarterLabel = item.quarter_label || scoreboardMonthTagEl?.textContent || "Current Quarter";
-    myScoreBox.textContent = `Showing quarterly final score for ${quarterLabel}.`;
+    myScoreBox.textContent = "";
   }
 }
 
@@ -742,7 +771,7 @@ function renderOtherStaffScores(items) {
     <div class="score-row">
       <div class="score-row-left">
         <div class="score-row-name">${escapeHtml(item.full_name || "-")}</div>
-        <div class="score-row-sub">${escapeHtml(item.team || "-")} | Quarterly | ${escapeHtml(item.rating_label || "-")}</div>
+        <div class="score-row-sub">${escapeHtml(item.team || "-")} | ${escapeHtml(item.rating_label || "-")}</div>
       </div>
       <div class="score-row-right">
         <span class="final-score-chip">${fmtScore(item.final_score)}</span>
@@ -812,7 +841,8 @@ async function afterActionRefresh() {
   await Promise.allSettled([
     loadAttendance(),
     loadPerformanceScore(),
-    loadStaffScoreboard()
+    loadStaffScoreboard(),
+    loadUpcomingSchedule()
   ]);
   refreshButtonState();
 }
