@@ -902,18 +902,18 @@ async function init() {
 
   ensurePopup();
 
+  const allowed = await checkPortalAccess();
+  if (!allowed) return;
+
+  fillStaffCard();
+  checkApi();
+
   if (checkInBtn) checkInBtn.addEventListener("click", handleCheckIn);
   if (checkOutBtn) checkOutBtn.addEventListener("click", handleCheckOut);
   if (breakStartBtn) breakStartBtn.addEventListener("click", () => handleBreakAction("START"));
   if (breakEndBtn) breakEndBtn.addEventListener("click", () => handleBreakAction("END"));
   if (breakTypeSelect) breakTypeSelect.addEventListener("change", () => updateBreakState(todayLogs));
   if (logoutBtn) logoutBtn.addEventListener("click", logout);
-
-  const allowed = await checkPortalAccess();
-  if (!allowed) return;
-
-  fillStaffCard();
-  checkApi();
 
   await loadCriticalPanelData();
   loadDeferredPanelData();
