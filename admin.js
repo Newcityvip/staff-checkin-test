@@ -11,7 +11,7 @@ const uploadedByInput = document.getElementById("uploadedBy");
 let adminSession = null;
 let dashboardMonth = "";
 let dashboardData = [];
-let dashboardRefreshPromise = null;
+let liveStatusData = null;
 
 let selectedQuarterAnchorMonth = "";
 
@@ -349,6 +349,98 @@ function getRatingClass(label) {
   return "rating-low";
 }
 
+
+function formatDateTimeShort(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '-';
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})(?::\d{2})?$/);
+  if (!m) return raw;
+  let hh = Number(m[2]);
+  const mm = m[3];
+  const ap = hh >= 12 ? 'PM' : 'AM';
+  if (hh === 0) hh = 12;
+  else if (hh > 12) hh -= 12;
+  return `${m[1]} ${hh}:${mm} ${ap}`;
+}
+
+function renderLiveList(targetId, items, emptyText, options = {}) {
+  const box = document.getElementById(targetId);
+  if (!box) return;
+
+  if (!items || !items.length) {
+    box.innerHTML = `<div class="live-empty">${escapeHtml(emptyText || 'No data')}</div>`;
+    return;
+  }
+
+  box.innerHTML = items.map(item => {
+    const topRight = options.showBreak ? (item.break_label || '-') : (item.shift_code || '-');
+    const subParts = [];
+    if (item.team) subParts.push(item.team);
+    if (item.login_id) subParts.push(item.login_id);
+    if (options.showShiftTime && item.scheduled_start && item.scheduled_end) subParts.push(`${item.scheduled_start} - ${item.scheduled_end}`);
+    if (options.showCheckIn && item.check_in_time) subParts.push(`In: ${formatDateTimeShort(item.check_in_time)}`);
+    if (options.showCheckOut && item.check_out_time) subParts.push(`Out: ${formatDateTimeShort(item.check_out_time)}`);
+    if (options.showLate && Number(item.late_minutes || 0) > 0) subParts.push(`Late: ${item.late_minutes}m`);
+
+    return `
+      <div class="live-row-item">
+        <div class="live-row-main">
+          <div class="live-row-name">${escapeHtml(item.full_name || '-')}</div>
+          <div class="live-row-sub">${escapeHtml(subParts.join(' | ') || '-')}</div>
+        </div>
+        <div class="live-row-tag">${escapeHtml(topRight)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderLiveStatus(data) {
+  liveStatusData = data || null;
+  const summary = (data && data.summary) || {};
+  const breakCounts = (data && data.break_counts) || {};
+  const lists = (data && data.lists) || {};
+
+  const setNode = (id, value) => {
+    const node = document.getElementById(id);
+    if (node) node.textContent = value == null || value === '' ? '-' : String(value);
+  };
+
+  setNode('liveOnShiftCount', summary.on_shift_now_count || 0);
+  setNode('liveCheckedInCount', summary.checked_in_count || 0);
+  setNode('liveCheckedOutCount', summary.checked_out_count || 0);
+  setNode('liveOnBreakCount', summary.on_break_count || 0);
+  setNode('liveLateCount', summary.late_today_count || 0);
+  setNode('liveNextShiftCount', summary.next_shift_count || 0);
+  setNode('liveBreakMini', `Break ${breakCounts.BREAK || 0} | Prayer ${breakCounts.PRAYER_BREAK || 0} | Bio ${breakCounts.BIO_BREAK || 0}`);
+  setNode('liveSnapshotTime', (data && data.time) ? formatDateTimeShort(data.time) : '-');
+  setNode('liveNextShiftTime', data && data.next_shift && data.next_shift.start_time ? `Next shift starts at ${data.next_shift.start_time}` : 'No next shift staff today');
+
+  renderLiveList('liveOnShiftList', lists.on_shift_now || [], 'No staff are inside the current shift window.', { showShiftTime: true, showCheckIn: true });
+  renderLiveList('liveOnBreakList', lists.on_break_now || [], 'Nobody is on break right now.', { showBreak: true, showCheckIn: true });
+  renderLiveList('liveLateList', lists.late_today || [], 'No late staff today.', { showLate: true, showCheckIn: true });
+  renderLiveList('liveNextShiftList', (data && data.next_shift && data.next_shift.staffs) || [], 'No next shift staff found for today.', { showShiftTime: true });
+}
+
+async function refreshLiveActivity() {
+  const ids = ['liveOnShiftList', 'liveOnBreakList', 'liveLateList', 'liveNextShiftList'];
+  ids.forEach(id => {
+    const node = document.getElementById(id);
+    if (node) node.innerHTML = '<div class="live-empty">Loading...</div>';
+  });
+
+  try {
+    const data = await getJson(`${API_BASE}?action=adminLiveStatus`);
+    if (!data?.ok) throw new Error(data?.error || 'Failed to load live staff activity');
+    renderLiveStatus(data);
+  } catch (err) {
+    const msg = `ERROR: ${escapeHtml(err?.message || err)}`;
+    ids.forEach(id => {
+      const node = document.getElementById(id);
+      if (node) node.innerHTML = `<div class="live-empty">${msg}</div>`;
+    });
+  }
+}
+
 function ensurePerformanceUi() {
   if (document.getElementById("performanceWrap")) return;
 
@@ -391,6 +483,18 @@ function ensurePerformanceUi() {
         margin-top:8px;
         line-height:1.45
       }
+      #performanceWrap .live-grid-6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px}
+      #performanceWrap .live-card{border:1px solid #dbe4f0;border-radius:16px;padding:14px;background:#ffffff;box-shadow:0 2px 10px rgba(15,23,42,.04)}
+      #performanceWrap .live-card .label{display:block;font-size:13px;color:#6b7280;margin-bottom:6px;font-weight:600}
+      #performanceWrap .live-card strong{font-size:18px;line-height:1.15;color:#0f172a}
+      #performanceWrap .live-mini{font-size:12px;color:#64748b;margin-top:8px}
+      #performanceWrap .live-list{display:flex;flex-direction:column;gap:10px}
+      #performanceWrap .live-row-item{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:12px;border:1px solid #e5edf7;border-radius:14px;background:#fff}
+      #performanceWrap .live-row-name{font-weight:800;color:#0f172a}
+      #performanceWrap .live-row-sub{font-size:12px;color:#64748b;margin-top:3px;line-height:1.45}
+      #performanceWrap .live-row-tag{font-size:12px;font-weight:800;padding:6px 10px;border-radius:999px;background:#eef2ff;color:#3346b4;white-space:nowrap}
+      #performanceWrap .live-empty{padding:14px;border:1px dashed #dbe4f0;border-radius:14px;background:#fff;color:#64748b;font-size:13px}
+
       #performanceWrap .table-wrap{
         overflow:auto;
         border:1px solid #dbe4f0;
@@ -516,16 +620,60 @@ function ensurePerformanceUi() {
       }
       @media (max-width: 920px){
         #performanceWrap .grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+        #performanceWrap .live-grid-6{grid-template-columns:repeat(3,minmax(0,1fr))}
         #performanceWrap .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
       }
       @media (max-width: 640px){
         #performanceWrap .grid-3,
         #performanceWrap .grid-4,
+        #performanceWrap .live-grid-6,
         #performanceWrap .kpi-grid{
           grid-template-columns:1fr
         }
       }
     </style>
+
+
+    <div class="panel admin-section">
+      <div class="panel-title-row">
+        <h3>Live Staff Activity</h3>
+        <div class="row-actions">
+          <span class="mini-pill" id="liveSnapshotTime">-</span>
+          <button type="button" class="small-btn secondary-btn" id="refreshLiveActivityBtn">Refresh Live Activity</button>
+        </div>
+      </div>
+
+      <div class="live-grid-6">
+        <div class="live-card"><span class="label">On Shift Now</span><strong id="liveOnShiftCount">0</strong></div>
+        <div class="live-card"><span class="label">Checked In</span><strong id="liveCheckedInCount">0</strong></div>
+        <div class="live-card"><span class="label">Checked Out</span><strong id="liveCheckedOutCount">0</strong></div>
+        <div class="live-card"><span class="label">On Break Now</span><strong id="liveOnBreakCount">0</strong><div class="live-mini" id="liveBreakMini">Break 0 | Prayer 0 | Bio 0</div></div>
+        <div class="live-card"><span class="label">Late Today</span><strong id="liveLateCount">0</strong></div>
+        <div class="live-card"><span class="label">Next Shift Staff</span><strong id="liveNextShiftCount">0</strong><div class="live-mini" id="liveNextShiftTime">-</div></div>
+      </div>
+
+      <div class="two-col admin-section">
+        <div class="panel" style="margin:0">
+          <div class="panel-title-row"><h3>On Shift Now</h3></div>
+          <div class="live-list" id="liveOnShiftList"><div class="live-empty">Loading...</div></div>
+        </div>
+        <div class="panel" style="margin:0">
+          <div class="panel-title-row"><h3>Next Shift</h3></div>
+          <div class="live-list" id="liveNextShiftList"><div class="live-empty">Loading...</div></div>
+        </div>
+      </div>
+
+      <div class="two-col admin-section">
+        <div class="panel" style="margin:0">
+          <div class="panel-title-row"><h3>On Break Now</h3></div>
+          <div class="live-list" id="liveOnBreakList"><div class="live-empty">Loading...</div></div>
+        </div>
+        <div class="panel" style="margin:0">
+          <div class="panel-title-row"><h3>Late Today</h3></div>
+          <div class="live-list" id="liveLateList"><div class="live-empty">Loading...</div></div>
+        </div>
+      </div>
+    </div>
 
     <div class="panel admin-section">
       <div class="panel-title-row">
@@ -648,7 +796,8 @@ function ensurePerformanceUi() {
 
   page.appendChild(wrap);
 
-  document.getElementById("refreshDashboardBtn")?.addEventListener("click", refreshPerformanceArea);
+  document.getElementById("refreshDashboardBtn")?.addEventListener("click", () => { refreshPerformanceArea(); refreshLiveActivity(); });
+  document.getElementById("refreshLiveActivityBtn")?.addEventListener("click", refreshLiveActivity);
   document.getElementById("saveKpiBtn")?.addEventListener("click", saveKpiForm);
   document.getElementById("resetKpiBtn")?.addEventListener("click", resetKpiForm);
   document.getElementById("loadSelectedKpiBtn")?.addEventListener("click", loadSelectedStaffIntoForm);
@@ -841,8 +990,6 @@ function loadSelectedStaffIntoForm() {
 }
 
 async function refreshPerformanceArea() {
-  if (dashboardRefreshPromise) return dashboardRefreshPromise;
-
   ensurePerformanceUi();
   setMonthDefaults();
 
@@ -854,33 +1001,29 @@ async function refreshPerformanceArea() {
   if (monthTag) monthTag.textContent = getQuarterInfoFromMonth(month).label || "-";
   if (body) body.innerHTML = `<tr><td colspan="8">Loading dashboard...</td></tr>`;
 
-  dashboardRefreshPromise = (async () => {
-    try {
-      const data = await getJson(`${API_BASE}?action=adminKpiDashboard&month=${encodeURIComponent(month)}`);
-      if (!data?.ok) {
-        throw new Error(data?.error || "Failed to load admin KPI dashboard");
-      }
+  refreshLiveActivity();
 
-      dashboardData = Array.isArray(data.data) ? data.data : [];
-      renderSummaryCards(dashboardData);
-      fillStaffSelect(dashboardData);
-      renderLeaderboardTable();
-
-      const currentSelected = getSelectedDashboardItem();
-      if (currentSelected) {
-        fillKpiFormFromItem(currentSelected);
-        renderPreview(currentSelected);
-      }
-    } catch (err) {
-      dashboardData = [];
-      renderSummaryCards([]);
-      if (body) body.innerHTML = `<tr><td colspan="8">ERROR: ${escapeHtml(err?.message || err)}</td></tr>`;
-    } finally {
-      dashboardRefreshPromise = null;
+  try {
+    const data = await getJson(`${API_BASE}?action=adminKpiDashboard&month=${encodeURIComponent(month)}`);
+    if (!data?.ok) {
+      throw new Error(data?.error || "Failed to load admin KPI dashboard");
     }
-  })();
 
-  return dashboardRefreshPromise;
+    dashboardData = Array.isArray(data.data) ? data.data : [];
+    renderSummaryCards(dashboardData);
+    fillStaffSelect(dashboardData);
+    renderLeaderboardTable();
+
+    const currentSelected = getSelectedDashboardItem();
+    if (currentSelected) {
+      fillKpiFormFromItem(currentSelected);
+      renderPreview(currentSelected);
+    }
+  } catch (err) {
+    dashboardData = [];
+    renderSummaryCards([]);
+    if (body) body.innerHTML = `<tr><td colspan="8">ERROR: ${escapeHtml(err?.message || err)}</td></tr>`;
+  }
 }
 
 function getKpiPayload() {
@@ -947,5 +1090,5 @@ if (requireAdminSession()) {
   checkApi();
   ensurePerformanceUi();
   setMonthDefaults();
-  setTimeout(() => { refreshPerformanceArea(); }, 0);
+  refreshPerformanceArea();
 }
