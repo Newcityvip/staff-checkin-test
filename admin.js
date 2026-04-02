@@ -11,6 +11,7 @@ const uploadedByInput = document.getElementById("uploadedBy");
 let adminSession = null;
 let dashboardMonth = "";
 let dashboardData = [];
+let dashboardRefreshPromise = null;
 
 let selectedQuarterAnchorMonth = "";
 
@@ -840,6 +841,8 @@ function loadSelectedStaffIntoForm() {
 }
 
 async function refreshPerformanceArea() {
+  if (dashboardRefreshPromise) return dashboardRefreshPromise;
+
   ensurePerformanceUi();
   setMonthDefaults();
 
@@ -851,27 +854,33 @@ async function refreshPerformanceArea() {
   if (monthTag) monthTag.textContent = getQuarterInfoFromMonth(month).label || "-";
   if (body) body.innerHTML = `<tr><td colspan="8">Loading dashboard...</td></tr>`;
 
-  try {
-    const data = await getJson(`${API_BASE}?action=adminKpiDashboard&month=${encodeURIComponent(month)}`);
-    if (!data?.ok) {
-      throw new Error(data?.error || "Failed to load admin KPI dashboard");
-    }
+  dashboardRefreshPromise = (async () => {
+    try {
+      const data = await getJson(`${API_BASE}?action=adminKpiDashboard&month=${encodeURIComponent(month)}`);
+      if (!data?.ok) {
+        throw new Error(data?.error || "Failed to load admin KPI dashboard");
+      }
 
-    dashboardData = Array.isArray(data.data) ? data.data : [];
-    renderSummaryCards(dashboardData);
-    fillStaffSelect(dashboardData);
-    renderLeaderboardTable();
+      dashboardData = Array.isArray(data.data) ? data.data : [];
+      renderSummaryCards(dashboardData);
+      fillStaffSelect(dashboardData);
+      renderLeaderboardTable();
 
-    const currentSelected = getSelectedDashboardItem();
-    if (currentSelected) {
-      fillKpiFormFromItem(currentSelected);
-      renderPreview(currentSelected);
+      const currentSelected = getSelectedDashboardItem();
+      if (currentSelected) {
+        fillKpiFormFromItem(currentSelected);
+        renderPreview(currentSelected);
+      }
+    } catch (err) {
+      dashboardData = [];
+      renderSummaryCards([]);
+      if (body) body.innerHTML = `<tr><td colspan="8">ERROR: ${escapeHtml(err?.message || err)}</td></tr>`;
+    } finally {
+      dashboardRefreshPromise = null;
     }
-  } catch (err) {
-    dashboardData = [];
-    renderSummaryCards([]);
-    if (body) body.innerHTML = `<tr><td colspan="8">ERROR: ${escapeHtml(err?.message || err)}</td></tr>`;
-  }
+  })();
+
+  return dashboardRefreshPromise;
 }
 
 function getKpiPayload() {
@@ -938,5 +947,5 @@ if (requireAdminSession()) {
   checkApi();
   ensurePerformanceUi();
   setMonthDefaults();
-  refreshPerformanceArea();
+  setTimeout(() => { refreshPerformanceArea(); }, 0);
 }
