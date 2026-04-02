@@ -1,4 +1,4 @@
-const API_BASE = "https://black-snowflake-338b.mdrobiulislam.workers.dev/";
+const API_BASE = "https://staff-portal-proxy.mdrobiulislam.workers.dev/";
 
 /* ========= ELEMENT HELPERS ========= */
 function el(...ids) {
@@ -14,11 +14,11 @@ const logoutBtn = el("logoutBtn");
 const checkInBtn = el("checkInBtn");
 const checkOutBtn = el("checkOutBtn");
 
-const breakTypeSelect = el("breakTypeSelect", "breakType");
-const breakRemarkInput = el("breakRemarkInput", "breakRemark");
+const breakTypeSelect = el("breakTypeSelect");
+const breakRemarkInput = el("breakRemarkInput");
 const breakStartBtn = el("breakStartBtn");
 const breakEndBtn = el("breakEndBtn");
-const breakState = el("breakState", "breakStatusPill");
+const breakState = el("breakState");
 
 const resultBox = el("resultMessage", "resultBox");
 const attendanceBox = el("attendanceMessage", "attendanceBox");
@@ -80,21 +80,21 @@ let portalClientIp = localStorage.getItem("staffPortalClientIp") || "";
 
 let scoreboardLoadStarted = false;
 
-function loadStaffScoreboardOnce() {
-  if (scoreboardLoadStarted) return;
+function loadStaffScoreboardOnce(force = false) {
+  if (!force && scoreboardLoadStarted) return;
   scoreboardLoadStarted = true;
   loadStaffScoreboard();
 }
 
 function setupLazyScoreboardLoad() {
-  const target = el("scoreboardMonthTag") || el("otherStaffScores") || el("myScoreBox");
+  const target = scoreboardMonthTagEl || otherStaffScores || myScoreBox;
   if (!target) {
-    setTimeout(loadStaffScoreboardOnce, 300);
+    setTimeout(() => loadStaffScoreboardOnce(), 250);
     return;
   }
 
   if (!("IntersectionObserver" in window)) {
-    setTimeout(loadStaffScoreboardOnce, 300);
+    setTimeout(() => loadStaffScoreboardOnce(), 250);
     return;
   }
 
@@ -106,7 +106,7 @@ function setupLazyScoreboardLoad() {
     }
   }, {
     root: null,
-    rootMargin: "300px 0px",
+    rootMargin: "250px 0px",
     threshold: 0.01
   });
 
@@ -115,7 +115,7 @@ function setupLazyScoreboardLoad() {
   setTimeout(() => {
     observer.disconnect();
     loadStaffScoreboardOnce();
-  }, 1200);
+  }, 1500);
 }
 
 /* ========= BASIC HELPERS ========= */
@@ -215,6 +215,21 @@ function prettifyLabel(key) {
   return map[key] || String(key || "")
     .replaceAll("_", " ")
     .replace(/\b\w/g, s => s.toUpperCase());
+}
+
+
+function buildQuarterlyScoreNote(score) {
+  const label = String((score && score.score_month) || "Live").trim();
+  const aw = score && score.attendance_weight != null ? score.attendance_weight : 40;
+  const kw = score && score.kpi_weight != null ? score.kpi_weight : 60;
+  const monthCount = Number(score && score.quarter_month_count != null ? score.quarter_month_count : 0);
+  const availableMonths = Array.isArray(score && score.quarter_available_months) ? score.quarter_available_months : [];
+
+  if (monthCount > 0 && availableMonths.length) {
+    return `Quarterly Final Score (${label}) is shown here. Attendance ${aw}% + KPI ${kw}% formula is averaged from ${monthCount} available month(s): ${availableMonths.join(", ")}.`;
+  }
+
+  return `Attendance ${aw}% + KPI ${kw}% = Final Score`;
 }
 
 /* ========= POPUP ========= */
@@ -603,7 +618,7 @@ function applyDeferredPanelData(data) {
   if (scoreNoteEl) {
     const aw = perf.attendance_weight ?? 40;
     const kw = perf.kpi_weight ?? 60;
-    scoreNoteEl.textContent = `Attendance ${aw}% + KPI ${kw}% = Final Score`;
+    scoreNoteEl.textContent = buildQuarterlyScoreNote(perf);
   }
 
   const scoreboard = data.scoreboard || {};
@@ -666,7 +681,7 @@ async function loadPerformanceScore() {
     if (scoreNoteEl) {
       const aw = score.attendance_weight ?? 40;
       const kw = score.kpi_weight ?? 60;
-      scoreNoteEl.textContent = `Attendance ${aw}% + KPI ${kw}% = Final Score`;
+      scoreNoteEl.textContent = buildQuarterlyScoreNote(score);
     }
   } catch (err) {
     setText(attendanceScoreEl, "-");
@@ -838,13 +853,16 @@ function getDeviceInfo() {
 
 /* ========= ACTION RUNNERS ========= */
 async function afterActionRefresh() {
-  await Promise.allSettled([
+  return Promise.allSettled([
     loadAttendance(),
-    loadPerformanceScore(),
-    loadStaffScoreboard(),
-    loadUpcomingSchedule()
-  ]);
-  refreshButtonState();
+    loadPerformanceScore()
+  ]).then(() => {
+    refreshButtonState();
+    setTimeout(() => {
+      loadStaffScoreboardOnce(true);
+      loadUpcomingSchedule();
+    }, 0);
+  });
 }
 
 async function handleBreakAction(mode) {
