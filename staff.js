@@ -77,47 +77,6 @@ let currentShift = null;
 let todayLogs = [];
 let portalClientIp = localStorage.getItem("staffPortalClientIp") || "";
 
-
-let scoreboardLoadStarted = false;
-
-function loadStaffScoreboardOnce(force = false) {
-  if (!force && scoreboardLoadStarted) return;
-  scoreboardLoadStarted = true;
-  loadStaffScoreboard();
-}
-
-function setupLazyScoreboardLoad() {
-  const target = scoreboardMonthTagEl || otherStaffScores || myScoreBox;
-  if (!target) {
-    setTimeout(() => loadStaffScoreboardOnce(), 250);
-    return;
-  }
-
-  if (!("IntersectionObserver" in window)) {
-    setTimeout(() => loadStaffScoreboardOnce(), 250);
-    return;
-  }
-
-  const observer = new IntersectionObserver((entries) => {
-    const hit = entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0);
-    if (hit) {
-      observer.disconnect();
-      loadStaffScoreboardOnce();
-    }
-  }, {
-    root: null,
-    rootMargin: "250px 0px",
-    threshold: 0.01
-  });
-
-  observer.observe(target);
-
-  setTimeout(() => {
-    observer.disconnect();
-    loadStaffScoreboardOnce();
-  }, 1500);
-}
-
 /* ========= BASIC HELPERS ========= */
 function setText(node, value) {
   if (!node) return;
@@ -215,21 +174,6 @@ function prettifyLabel(key) {
   return map[key] || String(key || "")
     .replaceAll("_", " ")
     .replace(/\b\w/g, s => s.toUpperCase());
-}
-
-
-function buildQuarterlyScoreNote(score) {
-  const label = String((score && score.score_month) || "Live").trim();
-  const aw = score && score.attendance_weight != null ? score.attendance_weight : 40;
-  const kw = score && score.kpi_weight != null ? score.kpi_weight : 60;
-  const monthCount = Number(score && score.quarter_month_count != null ? score.quarter_month_count : 0);
-  const availableMonths = Array.isArray(score && score.quarter_available_months) ? score.quarter_available_months : [];
-
-  if (monthCount > 0 && availableMonths.length) {
-    return `Quarterly Final Score (${label}) is shown here. Attendance ${aw}% + KPI ${kw}% formula is averaged from ${monthCount} available month(s): ${availableMonths.join(", ")}.`;
-  }
-
-  return `Attendance ${aw}% + KPI ${kw}% = Final Score`;
 }
 
 /* ========= POPUP ========= */
@@ -618,7 +562,7 @@ function applyDeferredPanelData(data) {
   if (scoreNoteEl) {
     const aw = perf.attendance_weight ?? 40;
     const kw = perf.kpi_weight ?? 60;
-    scoreNoteEl.textContent = buildQuarterlyScoreNote(perf);
+    scoreNoteEl.textContent = `Attendance ${aw}% + KPI ${kw}% = Final Score`;
   }
 
   const scoreboard = data.scoreboard || {};
@@ -630,12 +574,28 @@ function applyDeferredPanelData(data) {
 }
 
 function loadDeferredPanelData() {
-  setTimeout(() => {
-    Promise.allSettled([
-      loadPerformanceScore(),
-      loadUpcomingSchedule()
-    ]);
-    setupLazyScoreboardLoad();
+  setTimeout(async () => {
+    try {
+      const data = await getJson(
+        `${API_BASE}?action=staffPanelDeferred&login_id=${encodeURIComponent(currentStaff.login_id)}&days=7`
+      );
+
+      if (data?.ok) {
+        applyDeferredPanelData(data);
+      } else {
+        await Promise.allSettled([
+          loadUpcomingSchedule(),
+          loadPerformanceScore(),
+          loadStaffScoreboard()
+        ]);
+      }
+    } catch (err) {
+      await Promise.allSettled([
+        loadUpcomingSchedule(),
+        loadPerformanceScore(),
+        loadStaffScoreboard()
+      ]);
+    }
   }, 0);
 }
 
@@ -681,7 +641,7 @@ async function loadPerformanceScore() {
     if (scoreNoteEl) {
       const aw = score.attendance_weight ?? 40;
       const kw = score.kpi_weight ?? 60;
-      scoreNoteEl.textContent = buildQuarterlyScoreNote(score);
+      scoreNoteEl.textContent = `Attendance ${aw}% + KPI ${kw}% = Final Score`;
     }
   } catch (err) {
     setText(attendanceScoreEl, "-");
@@ -835,13 +795,15 @@ function getBreakOpenStatus(logs, breakType) {
 }
 
 function updateBreakState(logs) {
-  const type = toUpper(breakTypeSelect?.value || "BREAK");
-  const isOpen = getBreakOpenStatus(logs || todayLogs, type);
+  const useLogs = logs || todayLogs || [];
+  const activeType = ["BREAK", "PRAYER_BREAK", "BIO_BREAK"].find(type => {
+    return getBreakOpenStatus(useLogs, type);
+  });
 
   if (!breakState) return;
 
-  if (isOpen) {
-    breakState.textContent = `${type.replaceAll("_", " ")} ACTIVE`;
+  if (activeType) {
+    breakState.textContent = `${activeType.replaceAll("_", " ")} ACTIVE`;
   } else {
     breakState.textContent = "Ready";
   }
@@ -853,16 +815,13 @@ function getDeviceInfo() {
 
 /* ========= ACTION RUNNERS ========= */
 async function afterActionRefresh() {
-  return Promise.allSettled([
+  await Promise.allSettled([
     loadAttendance(),
-    loadPerformanceScore()
-  ]).then(() => {
-    refreshButtonState();
-    setTimeout(() => {
-      loadStaffScoreboardOnce(true);
-      loadUpcomingSchedule();
-    }, 0);
-  });
+    loadPerformanceScore(),
+    loadStaffScoreboard(),
+    loadUpcomingSchedule()
+  ]);
+  refreshButtonState();
 }
 
 async function handleBreakAction(mode) {
