@@ -14,11 +14,11 @@ const logoutBtn = el("logoutBtn");
 const checkInBtn = el("checkInBtn");
 const checkOutBtn = el("checkOutBtn");
 
-const breakTypeSelect = el("breakTypeSelect");
-const breakRemarkInput = el("breakRemarkInput");
+const breakTypeSelect = el("breakTypeSelect", "breakType");
+const breakRemarkInput = el("breakRemarkInput", "breakRemark");
 const breakStartBtn = el("breakStartBtn");
 const breakEndBtn = el("breakEndBtn");
-const breakState = el("breakState");
+const breakState = el("breakState", "breakStatusPill");
 
 const resultBox = el("resultMessage", "resultBox");
 const attendanceBox = el("attendanceMessage", "attendanceBox");
@@ -795,15 +795,13 @@ function getBreakOpenStatus(logs, breakType) {
 }
 
 function updateBreakState(logs) {
-  const useLogs = logs || todayLogs || [];
-  const activeType = ["BREAK", "PRAYER_BREAK", "BIO_BREAK"].find(type => {
-    return getBreakOpenStatus(useLogs, type);
-  });
+  const type = toUpper(breakTypeSelect?.value || "BREAK");
+  const isOpen = getBreakOpenStatus(logs || todayLogs, type);
 
   if (!breakState) return;
 
-  if (activeType) {
-    breakState.textContent = `${activeType.replaceAll("_", " ")} ACTIVE`;
+  if (isOpen) {
+    breakState.textContent = `${type.replaceAll("_", " ")} ACTIVE`;
   } else {
     breakState.textContent = "Ready";
   }
@@ -817,11 +815,16 @@ function getDeviceInfo() {
 async function afterActionRefresh() {
   await Promise.allSettled([
     loadAttendance(),
-    loadPerformanceScore(),
-    loadStaffScoreboard(),
-    loadUpcomingSchedule()
+    loadPerformanceScore()
   ]);
   refreshButtonState();
+
+  setTimeout(() => {
+    Promise.allSettled([
+      loadStaffScoreboard(),
+      loadUpcomingSchedule()
+    ]);
+  }, 0);
 }
 
 async function handleBreakAction(mode) {
