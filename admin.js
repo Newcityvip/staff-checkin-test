@@ -409,6 +409,7 @@ function renderLiveStatus(data) {
   setNode('liveCheckedInCount', summary.checked_in_count || 0);
   setNode('liveCheckedOutCount', summary.checked_out_count || 0);
   setNode('liveOnBreakCount', summary.on_break_count || 0);
+  setNode('liveWorkingNormallyCount', summary.working_normally_count || 0);
   setNode('liveLateCount', summary.late_today_count || 0);
   setNode('liveNextShiftCount', summary.next_shift_count || 0);
   setNode('liveBreakMini', `Break ${breakCounts.BREAK || 0} | Prayer ${breakCounts.PRAYER_BREAK || 0} | Bio ${breakCounts.BIO_BREAK || 0}`);
@@ -648,6 +649,7 @@ function ensurePerformanceUi() {
         <div class="live-card"><span class="label">Checked In</span><strong id="liveCheckedInCount">0</strong></div>
         <div class="live-card"><span class="label">Checked Out</span><strong id="liveCheckedOutCount">0</strong></div>
         <div class="live-card"><span class="label">On Break Now</span><strong id="liveOnBreakCount">0</strong><div class="live-mini" id="liveBreakMini">Break 0 | Prayer 0 | Bio 0</div></div>
+        <div class="live-card"><span class="label">Working Normally</span><strong id="liveWorkingNormallyCount">0</strong></div>
         <div class="live-card"><span class="label">Late Today</span><strong id="liveLateCount">0</strong></div>
         <div class="live-card"><span class="label">Next Shift Staff</span><strong id="liveNextShiftCount">0</strong><div class="live-mini" id="liveNextShiftTime">-</div></div>
       </div>
